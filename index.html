@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Eray Şahin - Mini Oyunlar</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: linear-gradient(45deg, #1a1a2e, #16213e);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 5px #fff, 0 0 10px #fff;
+            }
+            to {
+                text-shadow: 0 0 20px #fff, 0 0 30px #e60073;
+            }
+        }
+
+        #gameCanvas {
+            border: 2px solid #e60073;
+            border-radius: 5px;
+            margin: 20px;
+            box-shadow: 0 0 15px rgba(230, 0, 115, 0.5);
+        }
+
+        .controls {
+            margin: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Eray Şahin</h1>
+        <p>Mini Oyunlar Platformu</p>
+    </div>
+
+    <canvas id="gameCanvas" width="300" height="600"></canvas>
+
+    <div class="controls">
+        <p>Kontroller: ←→ Yukarı/Aşağı, ↑ Döndür, Space Çabuk Bırak</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const BLOCK_SIZE = 30;
+        const BOARD_WIDTH = 10;
+        const BOARD_HEIGHT = 20;
+
+        let board = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
+        let currentPiece = null;
+        let currentPiecePos = {x: 0, y: 0};
+        let score = 0;
+
+        const SHAPES = [
+            [[1, 1, 1, 1]], // I
+            [[1, 1], [1, 1]], // O
+            [[1, 1, 1], [0, 1, 0]], // T
+            [[1, 1, 1], [1, 0, 0]], // L
+            [[1, 1, 1], [0, 0, 1]], // J
+            [[1, 1, 0], [0, 1, 1]], // S
+            [[0, 1, 1], [1, 1, 0]]  // Z
+        ];
+
+        const COLORS = [
+            '#00f0f0', '#f0f000', '#a000f0', 
+            '#f0a000', '#0000f0', '#00f000', '#f00000'
+        ];
+
+        function createPiece() {
+            const index = Math.floor(Math.random() * SHAPES.length);
+            return {
+                shape: SHAPES[index],
+                color: COLORS[index]
+            };
+        }
+
+        function draw() {
+            ctx.fillStyle = '#0f0f23';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw board
+            for(let y = 0; y < BOARD_HEIGHT; y++) {
+                for(let x = 0; x < BOARD_WIDTH; x++) {
+                    if(board[y][x]) {
+                        ctx.fillStyle = board[y][x];
+                        ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, 
+                                    BLOCK_SIZE-1, BLOCK_SIZE-1);
+                    }
+                }
+            }
+
+            // Draw current piece
+            if(currentPiece) {
+                ctx.fillStyle = currentPiece.color;
+                for(let y = 0; y < currentPiece.shape.length; y++) {
+                    for(let x = 0; x < currentPiece.shape[y].length; x++) {
+                        if(currentPiece.shape[y][x]) {
+                            ctx.fillRect(
+                                (currentPiecePos.x + x) * BLOCK_SIZE,
+                                (currentPiecePos.y + y) * BLOCK_SIZE,
+                                BLOCK_SIZE-1, BLOCK_SIZE-1
+                            );
+                        }
+                    }
+                }
+            }
+
+            // Draw score
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+        }
+
+        function collision() {
+            for(let y = 0; y < currentPiece.shape.length; y++) {
+                for(let x = 0; x < currentPiece.shape[y].length; x++) {
+                    if(currentPiece.shape[y][x]) {
+                        const newX = currentPiecePos.x + x;
+                        const newY = currentPiecePos.y + y;
+                        
+                        if(newX < 0 || newX >= BOARD_WIDTH ||
+                           newY >= BOARD_HEIGHT ||
+                           (newY >= 0 && board[newY][newX])) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function merge() {
+            for(let y = 0; y < currentPiece.shape.length; y++) {
+                for(let x = 0; x < currentPiece.shape[y].length; x++) {
+                    if(currentPiece.shape[y][x]) {
+                        const boardY = currentPiecePos.y + y;
+                        if(boardY >= 0) {
+                            board[boardY][currentPiecePos.x + x] = currentPiece.color;
+                        }
+                    }
+                }
+            }
+        }
+
+        function clearLines() {
+            let linesCleared = 0;
+            for(let y = BOARD_HEIGHT - 1; y >= 0; ) {
+                if(board[y].every(cell => cell !== 0)) {
+                    linesCleared++;
+                    board.splice(y, 1);
+                    board.unshift(Array(BOARD_WIDTH).fill(0));
+                } else {
+                    y--;
+                }
+            }
+            if(linesCleared > 0) {
+                score += linesCleared * 100;
+            }
+        }
+
+        function update() {
+            currentPiecePos.y++;
+            if(collision()) {
+                currentPiecePos.y--;
+                merge();
+                clearLines();
+                spawnPiece();
+                if(collision()) {
+                    alert('Game Over! Score: ' + score);
+                    resetGame();
+                }
+            }
+        }
+
+        function spawnPiece() {
+            currentPiece = createPiece();
+            currentPiecePos = {
+                x: Math.floor(BOARD_WIDTH/2 - currentPiece.shape[0].length/2),
+                y: -1
+            };
+        }
+
+        function resetGame() {
+            board = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
+            score = 0;
+            spawnPiece();
+        }
+
+        document.addEventListener('keydown', event => {
+            switch(event.keyCode) {
+                case 37: // Left
+                    currentPiecePos.x--;
+                    if(collision()) currentPiecePos.x++;
+                    break;
+                case 39: // Right
+                    currentPiecePos.x++;
+                    if(collision()) currentPiecePos.x--;
+                    break;
+                case 40: // Down
+                    update();
+                    break;
+                case 38: // Up (rotate)
+                    rotate();
+                    break;
+                case 32: // Space
+                    while(!collision()) {
+                        currentPiecePos.y++;
+                    }
+                    currentPiecePos.y--;
+                    update();
+                    break;
+            }
+            draw();
+        });
+
+        function rotate() {
+            const rotated = currentPiece.shape[0].map((_, i) =>
+                currentPiece.shape.map(row => row[i]).reverse()
+            );
+            const oldShape = currentPiece.shape;
+            currentPiece.shape = rotated;
+            if(collision()) {
+                currentPiece.shape = oldShape;
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        spawnPiece();
+        gameLoop();
+    </script>
+</body>
+</html>
